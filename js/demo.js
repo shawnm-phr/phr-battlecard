@@ -160,6 +160,7 @@ var BC_DATA = {
   var vs1 = document.getElementById('bc-vs-1');
   var addBtn = document.getElementById('bc-add');
   var removeBtn = document.getElementById('bc-remove-1');
+  var removeFirst = document.getElementById('bc-remove-0');
   var card = document.getElementById('bc-card');
   var byId = {};
   BC_DATA.competitors.forEach(function(c){ byId[c.id] = c; });
@@ -215,6 +216,8 @@ var BC_DATA = {
     ico[i].hidden = !(c && c.logo);
     if(c && c.logo) ico[i].src = c.logo;
     sel[i].parentNode.classList.toggle('has-icon', !!(c && c.logo));
+    sel[i].parentNode.classList.toggle('has-value', !!current);
+    if(i === 0) removeFirst.hidden = !current;
   }
 
   /* ---------- Render pieces ---------- */
@@ -371,6 +374,8 @@ var BC_DATA = {
   });
   addBtn.addEventListener('click', function(){ showSecond = true; sync(); sel[1].focus(); });
   removeBtn.addEventListener('click', function(){ picked = picked.slice(0, 1); showSecond = false; sync(); addBtn.focus(); });
+  // Remove the first competitor: the second (if any) moves up; otherwise back to the blank start
+  removeFirst.addEventListener('click', function(){ picked.shift(); showSecond = false; sync(); sel[0].focus(); });
 
   var m = location.hash.match(/vs=([\w,-]+)/);
   if(m){
@@ -379,4 +384,28 @@ var BC_DATA = {
     });
   }
   sync();
+}());
+
+/* ==========================================================================
+   Sidebar — collapse to an icon rail (remembered per browser)
+   ========================================================================== */
+(function(){
+  var app = document.querySelector('.bc-app');
+  var btn = document.getElementById('bc-collapse');
+  if(!app || !btn) return;
+  var KEY = 'bc-side-collapsed';
+
+  function set(collapsed){
+    app.classList.toggle('is-collapsed', collapsed);
+    btn.setAttribute('aria-expanded', String(!collapsed));
+    btn.title = collapsed ? 'Expand menu' : 'Collapse menu';
+    btn.querySelector('.bc-nav-label').textContent = collapsed ? 'Expand' : 'Collapse';
+  }
+  try { set(localStorage.getItem(KEY) === '1'); } catch(e){ set(false); }
+
+  btn.addEventListener('click', function(){
+    var collapsed = !app.classList.contains('is-collapsed');
+    set(collapsed);
+    try { localStorage.setItem(KEY, collapsed ? '1' : '0'); } catch(e){}
+  });
 }());

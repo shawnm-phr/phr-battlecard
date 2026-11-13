@@ -13,8 +13,7 @@
 /* Hero + picker */
 .demo-scope .bc-hero{max-width:900px;margin:0 auto;padding:120px 0 48px;text-align:center;transition:padding .3s ease}
 .demo-scope .bc-page.has-card .bc-hero{padding:56px 0 32px}
-.demo-scope .bc-eyebrow{margin:0 0 8px;font-size:13px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--blue)}
-.demo-scope .bc-title{margin:0 0 40px;font-size:40px;line-height:1.15;font-weight:800;color:var(--navy)}
+.demo-scope .bc-title{margin:0;font-size:40px;line-height:1.15;font-weight:800;color:var(--navy)}
 .demo-scope .bc-page.has-card .bc-title{font-size:28px;margin-bottom:24px}
 
 .demo-scope .bc-picker{display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:12px}
@@ -28,12 +27,12 @@
 .demo-scope .bc-select:hover{border-color:var(--blue-light)}
 .demo-scope .bc-select:focus-visible{outline:none;border-color:var(--blue);box-shadow:0 0 0 4px rgba(37,99,235,.15)}
 .demo-scope .bc-select.is-empty{color:var(--text-muted);font-weight:500}
-.demo-scope #bc-slot-1 .bc-select{padding-right:76px;background-position:right 46px center}
+.demo-scope #bc-slot-1 .bc-select,.demo-scope #bc-slot-0.has-value .bc-select{padding-right:76px;background-position:right 46px center}
 .demo-scope .bc-remove{position:absolute;right:8px;top:50%;transform:translateY(-50%);width:30px;height:30px;border:0;border-radius:8px;background:transparent;color:var(--text-muted);font-size:20px;line-height:1;cursor:pointer}
 .demo-scope .bc-remove:hover{background:var(--bg-card);color:var(--navy)}
 .demo-scope .bc-add{height:56px;padding:0 20px;border:1.5px dashed var(--border);border-radius:12px;background:transparent;font:inherit;font-size:15px;font-weight:600;color:var(--blue);cursor:pointer;transition:border-color .2s,background .2s}
 .demo-scope .bc-add:hover{border-color:var(--blue-light);background:var(--bg-light)}
-.demo-scope .bc-hint{margin:20px 0 0;font-size:14px;color:var(--text-muted)}
+.demo-scope .bc-hint{margin:10px 0 36px;font-size:14px;color:var(--text-muted)}
 .demo-scope .bc-page.has-card .bc-hint{display:none}
 
 /* Card shell */
@@ -156,23 +155,43 @@
 .demo-scope .bc-note{display:block;margin-top:4px;font-size:13px;line-height:1.45;color:var(--text-muted)}
 
 /* App shell: left sidebar + content */
-.demo-scope .bc-app{display:grid;grid-template-columns:248px minmax(0,1fr);min-height:100vh}
-.demo-scope .bc-side{position:sticky;top:0;height:100vh;display:flex;flex-direction:column;gap:28px;padding:24px 16px;border-right:1px solid var(--border);background:var(--bg-light)}
+.demo-scope .bc-app{display:grid;grid-template-columns:248px minmax(0,1fr);min-height:100vh;transition:grid-template-columns .25s ease}
+.demo-scope .bc-side{position:sticky;top:0;height:100vh;display:flex;flex-direction:column;gap:28px;padding:24px 16px;overflow:hidden;border-right:1px solid var(--border);background:var(--bg-light)}
 .demo-scope .bc-side-brand{display:flex;flex-direction:column;align-items:flex-start;gap:6px;padding:4px 12px 0}
-.demo-scope .bc-side-brand img{display:block;height:26px;width:auto}
-.demo-scope .bc-side-brand span{font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--text-muted)}
+.demo-scope .bc-side-logo{display:block;width:138px;overflow:hidden;transition:width .25s ease}
+.demo-scope .bc-side-logo img{display:block;height:26px;width:auto;max-width:none}
+.demo-scope .bc-side-tag{font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--text-muted)}
 .demo-scope .bc-nav ul{display:flex;flex-direction:column;gap:4px}
 .demo-scope .bc-nav-item{display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:10px;font-size:14px;font-weight:600;color:var(--text-body);white-space:nowrap;cursor:default}
 .demo-scope .bc-nav-item svg{flex:none;width:20px;height:20px;color:var(--text-muted)}
 .demo-scope .bc-nav-item.is-active{background:var(--bg-white);color:var(--navy);box-shadow:0 1px 2px rgba(13,27,62,.06),inset 0 0 0 1px var(--border);cursor:pointer}
 .demo-scope .bc-nav-item.is-active svg{color:var(--blue)}
 .demo-scope .bc-nav-item[aria-disabled="true"]{opacity:.75}
+.demo-scope .bc-collapse{display:flex;align-items:center;gap:12px;margin-top:auto;padding:10px 12px;border:0;border-radius:10px;background:transparent;font:inherit;font-size:14px;font-weight:600;color:var(--text-muted);white-space:nowrap;cursor:pointer;transition:background .2s,color .2s}
+.demo-scope .bc-collapse:hover{background:var(--bg-card);color:var(--navy)}
+.demo-scope .bc-collapse:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+.demo-scope .bc-collapse svg{flex:none;width:20px;height:20px;transition:transform .25s ease}
+
+/* Collapsed: icon rail */
+.demo-scope .bc-app.is-collapsed{grid-template-columns:72px minmax(0,1fr)}
+.demo-scope .is-collapsed .bc-side{padding:24px 12px}
+.demo-scope .is-collapsed .bc-side-brand{align-items:center;padding:4px 0 0}
+.demo-scope .is-collapsed .bc-side-logo{width:20px}
+.demo-scope .is-collapsed .bc-side-tag,.demo-scope .is-collapsed .bc-nav-label{display:none}
+.demo-scope .is-collapsed .bc-nav-item,.demo-scope .is-collapsed .bc-collapse{justify-content:center;padding:10px}
+.demo-scope .is-collapsed .bc-collapse svg{transform:rotate(180deg)}
 
 @media(max-width:900px){
-  .demo-scope .bc-app{display:block}
+  .demo-scope .bc-app,.demo-scope .bc-app.is-collapsed{display:block}
+  .demo-scope .bc-collapse{display:none}
+  .demo-scope .bc-app.is-collapsed .bc-side{padding:12px 24px}
+  .demo-scope .is-collapsed .bc-side-logo{width:auto}
+  .demo-scope .is-collapsed .bc-side-tag,.demo-scope .is-collapsed .bc-nav-label{display:inline}
+  .demo-scope .is-collapsed .bc-nav-item{padding:8px 12px}
+  .demo-scope .bc-side{overflow:visible}
   .demo-scope .bc-side{position:static;height:auto;flex-direction:row;align-items:center;gap:20px;padding:12px 24px;border-right:0;border-bottom:1px solid var(--border)}
   .demo-scope .bc-side-brand{flex:none;padding:0}
-  .demo-scope .bc-side-brand img{height:22px}
+  .demo-scope .bc-side-logo img{height:22px}
   .demo-scope .bc-nav{min-width:0;overflow-x:auto;scrollbar-width:none}
   .demo-scope .bc-nav ul{flex-direction:row}
   .demo-scope .bc-nav-item{padding:8px 12px}
@@ -180,7 +199,8 @@
 }
 @media(max-width:768px){
   .demo-scope .bc-hero{padding:72px 0 32px}
-  .demo-scope .bc-title{font-size:30px;margin-bottom:28px}
+  .demo-scope .bc-title{font-size:30px}
+  .demo-scope .bc-hint{margin-bottom:28px}
   .demo-scope .bc-overview{padding:20px}
 }
 @media(max-width:560px){
