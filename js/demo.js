@@ -219,7 +219,7 @@ var BC_DATA = {
 
   /* ---------- Render pieces ---------- */
   var R = 50, C = 2 * Math.PI * R;
-  function donut(p, s){
+  function donut(p, s, lead){
     var b = band(s.pct);
     var len = s.pct == null ? 0 : C * s.pct / 100;
     return '<figure class="bc-score' + (p.isPhr ? ' is-phr' : '') + '">' +
@@ -233,19 +233,26 @@ var BC_DATA = {
         '<span class="bc-chip ' + b.cls + '"><i></i>' + b.label + '</span>' +
         '<span class="bc-tally">' + s.tally.yes + ' ✓ · ' + s.tally.partial + ' ◐ · ' + s.tally.no + ' ✕</span>' +
       '</figcaption>' +
+      (lead ? '<p class="bc-lead ' + lead.cls + '">' + (lead.icon || '') + '<span>' + lead.html + '</span></p>' : '') +
     '</figure>';
   }
 
   function overview(parties){
     var scores = parties.map(function(p){ return score(p.values, allRows); });
     var phr = scores[0].pct;
-    var leads = parties.slice(1).map(function(p, i){
-      var d = phr - scores[i + 1].pct;
-      var txt = d > 0 ? 'PeoplesHR leads <strong>' + esc(p.name) + '</strong> by <strong>' + d + ' pts</strong>'
-              : d < 0 ? '<strong>' + esc(p.name) + '</strong> scores <strong>' + (-d) + ' pts</strong> higher'
-              : 'Level with <strong>' + esc(p.name) + '</strong>';
-      return '<li class="' + (d >= 0 ? 'is-ahead' : 'is-behind') + '">' + ICON.up + '<span>' + txt + '</span></li>';
-    }).join('');
+    // One lead line per card, so every score card has the same shape
+    var ahead = 0;
+    var leads = parties.map(function(p, i){
+      if(i === 0) return null;
+      var d = phr - scores[i].pct;
+      if(d > 0) ahead++;
+      return d > 0 ? { cls: 'is-ahead', icon: ICON.up, html: 'PeoplesHR leads by <strong>' + d + ' pts</strong>' }
+           : d < 0 ? { cls: 'is-behind', icon: ICON.up, html: 'Leads PeoplesHR by <strong>' + (-d) + ' pts</strong>' }
+           : { cls: 'is-level', html: 'Level with PeoplesHR' };
+    });
+    var rivals = parties.length - 1;
+    leads[0] = { cls: ahead === rivals ? 'is-ahead' : 'is-level', icon: ahead === rivals ? ICON.up : '',
+      html: 'Ahead of <strong>' + ahead + ' of ' + rivals + '</strong> ' + (rivals === 1 ? 'competitor' : 'competitors') };
 
     var cats = BC_DATA.categories.map(function(cat){
       return '<div class="bc-cat-card"><h4>' + esc(cat.label) + '</h4>' +
@@ -261,10 +268,7 @@ var BC_DATA = {
 
     return '<section class="bc-block bc-overview" aria-labelledby="bc-ov-title">' +
       '<h2 class="bc-section-title" id="bc-ov-title">Overview</h2>' +
-      '<div class="bc-ov-top">' +
-        '<div class="bc-scores">' + parties.map(function(p, i){ return donut(p, scores[i]); }).join('') + '</div>' +
-        '<ul class="bc-leads">' + leads + '</ul>' +
-      '</div>' +
+      '<div class="bc-scores">' + parties.map(function(p, i){ return donut(p, scores[i], leads[i]); }).join('') + '</div>' +
       '<h3 class="bc-sub-title">Score by category</h3>' +
       '<div class="bc-cats">' + cats + '</div>' +
       '<p class="bc-footnote">Score = capabilities covered across ' + scores[0].n + ' scored checks (✓ = 1, ◐ = ½, ✕ = 0; text rows not scored). ' +
