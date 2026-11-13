@@ -1,0 +1,1499 @@
+/* intractive-demo - page JS */
+(function(){
+  var tabs=document.querySelectorAll('.module-tab');
+  function go(id){
+    tabs.forEach(function(t){t.classList.remove('active');});
+    document.querySelectorAll('.preview-content').forEach(function(p){p.classList.remove('active');});
+    var t=document.querySelector('.module-tab[data-module="'+id+'"]');
+    if(t) t.classList.add('active');
+    var p=document.getElementById('preview-'+id);
+    if(p) p.classList.add('active');
+  }
+  tabs.forEach(function(tab){
+    tab.addEventListener('click',function(){go(tab.getAttribute('data-module'));});
+  });
+}());
+
+(function(){
+  const track = document.getElementById('testimonial-track');
+  if(!track) return; // guard: element absent on non-homepage pages
+
+  const dots = document.querySelectorAll('#t-dots .t-dot');
+  const prev = document.getElementById('t-prev');
+  const next = document.getElementById('t-next');
+  const total = dots.length;
+  let current = 0;
+  let autoTimer;
+
+  function goTo(idx) {
+    current = (idx + total) % total;
+    track.style.transform = `translateX(-${current * 100}%)`;
+    dots.forEach((d, i) => d.classList.toggle('active', i === current));
+  }
+
+  if(prev) prev.addEventListener('click', () => { goTo(current - 1); resetAuto(); });
+  if(next) next.addEventListener('click', () => { goTo(current + 1); resetAuto(); });
+  dots.forEach((d, i) => d.addEventListener('click', () => { goTo(i); resetAuto(); }));
+
+  let startX = 0;
+  track.addEventListener('touchstart', e => { startX = e.touches[0].clientX; }, {passive:true});
+  track.addEventListener('touchend', e => {
+    const diff = startX - e.changedTouches[0].clientX;
+    if(Math.abs(diff) > 40) { goTo(diff > 0 ? current + 1 : current - 1); resetAuto(); }
+  });
+
+  function resetAuto() { clearInterval(autoTimer); autoTimer = setInterval(() => goTo(current + 1), 5000); }
+  resetAuto();
+})();
+
+const hamburger = document.getElementById('hamburger');
+const mobileNav = document.getElementById('mobile-nav');
+if(hamburger && mobileNav){
+  hamburger.addEventListener('click', () => {
+    hamburger.classList.toggle('open');
+    mobileNav.classList.toggle('open');
+    document.body.style.overflow = mobileNav.classList.contains('open') ? 'hidden' : '';
+  });
+}
+
+[['mob-customers-toggle','mob-customers-sub'],['mob-learn-toggle','mob-learn-sub'],['mob-company-toggle','mob-company-sub'],['mob-pricing-toggle','mob-pricing-sub']].forEach(([tid, sid]) => {
+  const toggle = document.getElementById(tid);
+  const sub = document.getElementById(sid);
+  if(toggle && sub) toggle.addEventListener('click', () => {
+    toggle.classList.toggle('open');
+    sub.classList.toggle('open');
+  });
+});
+const mobProductToggle = document.getElementById('mob-product-toggle');
+const mobProductSub = document.getElementById('mob-product-sub');
+if(mobProductToggle && mobProductSub){
+  mobProductToggle.addEventListener('click', () => {
+    mobProductToggle.classList.toggle('open');
+    mobProductSub.classList.toggle('open');
+  });
+}
+
+/* Footer accordion -- wraps each .ft-col's heading + links (Products,
+   Industries, Resources, Calculators, ...) into a clickable .ft-acc-btn
+   / .ft-acc-body pair, mirroring the .nv-acc pattern already used for the
+   mobile nav panel. Runs unconditionally (cheap DOM move, no page-specific
+   markup needed) -- the CSS in footer.css only actually collapses the
+   sections at <=680px, so desktop/tablet render exactly as before. Footer
+   markup is duplicated across every page rather than a shared include, so
+   this is done at runtime instead of touching ~80 files. */
+document.querySelectorAll('.ft-top > .ft-col').forEach((col, i) => {
+  const heading = col.querySelector(':scope > .ft-h');
+  if(!heading) return;
+
+  const inner = document.createElement('div');
+  inner.className = 'ft-acc-inner';
+  while(heading.nextSibling) inner.appendChild(heading.nextSibling);
+
+  const body = document.createElement('div');
+  body.className = 'ft-acc-body';
+  body.id = 'ft-acc-body-' + i;
+  body.appendChild(inner);
+  col.appendChild(body);
+
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'ft-acc-btn';
+  btn.setAttribute('aria-expanded', 'false');
+  btn.setAttribute('aria-controls', body.id);
+  btn.innerHTML = heading.innerHTML +
+    '<svg class="ft-acc-caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>';
+  heading.innerHTML = '';
+  heading.appendChild(btn);
+
+  btn.addEventListener('click', () => {
+    const open = col.classList.toggle('ft-acc-open');
+    btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+  });
+});
+
+window.addEventListener('resize', () => {
+  if(hamburger && mobileNav && window.innerWidth > 768) {
+    hamburger.classList.remove('open');
+    mobileNav.classList.remove('open');
+    document.body.style.overflow = '';
+  }
+});
+
+const phrScriptTag = document.currentScript;
+// site root, from this script's own URL; asset_v() serves it as js/phr.v<mtime>.js
+const phrAssetBase = phrScriptTag ? phrScriptTag.src.replace(/js\/phr(?:\.v\d+)?\.js(?:[?#].*)?$/, '') : '';
+
+/* Logo marquee: keeps the CSS translateX(-50%) loop (.logo-slider-track /
+   .logo-track, see styles.css) seamless when a page only has a handful of
+   client logos. The markup already duplicates its logo list once so the
+   loop can wrap (first half === second half); on a wide screen that single
+   half can be narrower than the viewport, so the track visibly runs out of
+   logos before it wraps back around. Repeats the underlying set until each
+   half is at least as wide as its container, and stretches the animation
+   duration by the same factor so the scroll speed stays the same. Tracks
+   that already have enough logos to fill the screen are left untouched. */
+function parseSeconds(v) {
+  const n = parseFloat(v);
+  if (Number.isNaN(n)) return null;
+  return v.trim().endsWith('ms') ? n / 1000 : n;
+}
+function ensureSeamlessLogoLoop(track) {
+  if (!track) return;
+  const children = Array.from(track.children);
+  if (!children.length || children.length % 2 !== 0) return;
+  const half = children.length / 2;
+  const firstHalfHTML = children.slice(0, half).map(el => el.outerHTML).join('');
+  const secondHalfHTML = children.slice(half).map(el => el.outerHTML).join('');
+  if (firstHalfHTML !== secondHalfHTML) return; // not the expected "duplicated once" shape
+
+  const container = track.closest('.logo-scroller, .client-logos') || track.parentElement;
+  const targetWidth = Math.max(container ? container.clientWidth : 0, window.innerWidth);
+  const unitWidth = track.scrollWidth / 2;
+  if (!targetWidth || !unitWidth) return;
+
+  let repeats = 1;
+  while (unitWidth * repeats < targetWidth && repeats < 12) repeats++;
+  if (repeats <= 1) return;
+
+  const oneHalf = firstHalfHTML.repeat(repeats);
+  track.innerHTML = oneHalf + oneHalf;
+
+  const currentDuration = parseSeconds(getComputedStyle(track).animationDuration);
+  if (currentDuration) track.style.animationDuration = (currentDuration * repeats) + 's';
+}
+document.querySelectorAll('.logo-slider-track, .logo-track:not(.logo-track--static)').forEach(ensureSeamlessLogoLoop);
+
+const industryLogos = {
+  manufacturing: [
+    '<img src="uploads/2026/04/bitumix.webp" alt="Bitumix" loading="lazy"/>',
+    '<img src="uploads/2026/04/arpico.webp" alt="Arpico" loading="lazy"/>',
+    '<img src="uploads/2026/04/acme.webp" alt="Acme" loading="lazy"/>',
+    '<img src="uploads/2026/04/Ultratech.webp" alt="Ultratech" loading="lazy"/>',
+    '<img src="uploads/2026/04/tropicoir.webp" alt="Tropicoir" loading="lazy"/>',
+    '<img src="uploads/2026/04/TokyoCement.webp" alt="Tokyo Cement" loading="lazy"/>',
+    '<img src="uploads/2026/04/sunagro.webp" alt="Sunagro" loading="lazy"/>',
+    '<img src="uploads/2026/04/specialsteels.webp" alt="Special Steels" loading="lazy"/>',
+    '<img src="uploads/2026/04/pyramidwilmar.webp" alt="Pyramid Wilmar" loading="lazy"/>',
+    '<img src="uploads/2026/04/prym.webp" alt="Prym" loading="lazy"/>',
+    '<img src="uploads/2026/04/phoenix.webp" alt="Phoenix" loading="lazy"/>',
+    '<img src="uploads/2026/04/microminerals.webp" alt="Micro Minerals" loading="lazy"/>',
+    '<img src="uploads/2026/04/laxapana.webp" alt="Laxapana" loading="lazy"/>',
+    '<img src="uploads/2026/04/lankem.webp" alt="Lankem" loading="lazy"/>',
+    '<img src="uploads/2026/04/lakro.webp" alt="Lakro" loading="lazy"/>',
+    '<img src="uploads/2026/04/kvc.webp" alt="KVC" loading="lazy"/>',
+    '<img src="uploads/2026/04/kotagala.webp" alt="Kotagala" loading="lazy"/>',
+    '<img src="uploads/2026/04/kiffs.webp" alt="KIFFS" loading="lazy"/>',
+    '<img src="uploads/2026/04/Fonterra.webp" alt="Fonterra" loading="lazy"/>',
+    '<img src="uploads/2026/04/euorosubstrates.webp" alt="Euro Substrates" loading="lazy"/>',
+    '<img src="uploads/2026/04/Delmege.webp" alt="Delmege" loading="lazy"/>',
+    '<img src="uploads/2026/04/cwmackie.webp" alt="CW Mackie" loading="lazy"/>',
+    '<img src="uploads/2026/04/ceytape.webp" alt="Ceytape" loading="lazy"/>',
+    '<img src="uploads/2026/04/ceyflex.webp" alt="Ceyflex" loading="lazy"/>',
+    '<img src="uploads/2026/04/CEAT.webp" alt="CEAT" loading="lazy"/>',
+    '<img src="uploads/2026/04/brandix.webp" alt="Brandix" loading="lazy"/>',
+  ],
+  hospitality: [
+    '<img src="uploads/2026/06/LaVie.webp" alt="LaVie" loading="lazy"/>',
+    '<img src="uploads/2026/06/Pratesis.webp" alt="Pratesis" loading="lazy"/>',
+    '<img src="uploads/2026/06/Sunlight.webp" alt="Sunlight" loading="lazy"/>',
+    '<img src="uploads/2026/04/Anantara.webp" alt="Anantara" loading="lazy"/>',
+    '<img src="uploads/2026/04/avani.webp" alt="Avani" loading="lazy"/>',
+    '<img src="uploads/2026/04/ayura-wellness.webp" alt="Ayura Wellness" loading="lazy"/>',
+    '<img src="uploads/2026/04/club-palm-bay.webp" alt="Club Palm Bay" loading="lazy"/>',
+    '<img src="uploads/2026/04/Galle-Fort-Hotel.webp" alt="Galle Fort Hotel" loading="lazy"/>',
+    '<img src="uploads/2026/04/Kings-Pavilion.webp" alt="Kings Pavilion" loading="lazy"/>',
+    '<img src="uploads/2026/04/sigiriya-village.webp" alt="Sigiriya Village" loading="lazy"/>',
+    '<img src="uploads/2026/04/The-Palms.webp" alt="The Palms" loading="lazy"/>',
+    '<img src="uploads/2026/04/Thotagala.webp" alt="Thotagala" loading="lazy"/>',
+  ],
+  banking: [
+    '<img src="uploads/2026/04/arpico-insurance.webp" alt="Arpico Insurance" loading="lazy"/>',
+    '<img src="uploads/2026/04/Beckett-Capital.webp" alt="Beckett Capital" loading="lazy"/>',
+    '<img src="uploads/2026/04/first-capital.webp" alt="First Capital" loading="lazy"/>',
+    '<img src="uploads/2026/04/lcb-finance.webp" alt="LCB Finance" loading="lazy"/>',
+    '<img src="uploads/2026/04/NDB-bank.webp" alt="NDB Bank" loading="lazy"/>',
+    '<img src="uploads/2026/04/Orient-Finance.webp" alt="Orient Finance" loading="lazy"/>',
+    '<img src="uploads/2026/04/peoplesbank.webp" alt="Peoples Bank" loading="lazy"/>',
+  ],
+  retail: [
+    '<img src="uploads/2026/04/akbar.webp" alt="Akbar" loading="lazy"/>',
+    '<img src="uploads/2026/04/arpico.webp" alt="Arpico" loading="lazy"/>',
+    '<img src="uploads/2026/04/Fonterra.webp" alt="Fonterra" loading="lazy"/>',
+    '<img src="uploads/2026/04/keells.webp" alt="Keells" loading="lazy"/>',
+  ],
+  healthcare: [
+    '<img src="uploads/2026/04/ambicaglobal.webp" alt="Ambica Global" loading="lazy"/>',
+    '<img src="uploads/2026/04/healthguard.webp" alt="Healthguard" loading="lazy"/>',
+    '<img src="uploads/2026/04/sun-pharma.webp" alt="Sun Pharma" loading="lazy"/>',
+    '<img src="uploads/2026/04/sunshine.webp" alt="Sunshine" loading="lazy"/>',
+    '<img src="uploads/2026/04/UY-Dental.webp" alt="UY Dental" loading="lazy"/>',
+    '<img src="uploads/2026/04/visioncare.webp" alt="Visioncare" loading="lazy"/>',
+    '<img src="uploads/2026/04/Dispensing-Opticians.webp" alt="Dispensing Opticians" loading="lazy"/>',
+    '<img src="uploads/2026/04/Lanka-Hospitals.webp" alt="Lanka Hospitals" loading="lazy"/>',
+    '<img src="uploads/2026/04/B-Braun.webp" alt="B Braun" loading="lazy"/>',
+    '<img src="uploads/2026/04/Browns-Hospitals.webp" alt="Browns Hospitals" loading="lazy"/>',
+    '<img src="uploads/2026/04/Mount-Lotus.webp" alt="Mount Lotus" loading="lazy"/>',
+  ],
+  it: [
+    '<img src="uploads/2026/04/zillion-e.webp" alt="Zillione" loading="lazy"/>',
+    '<img src="uploads/2026/04/Tellda.webp" alt="Tellda" loading="lazy"/>',
+    '<img src="uploads/2026/04/nable.webp" alt="Nable" loading="lazy"/>',
+    '<img src="uploads/2026/04/inivos.webp" alt="Inivos" loading="lazy"/>',
+  ],
+  logistics: [
+    '<img src="uploads/2026/04/mclarens-group.webp" alt="McLarens Group" loading="lazy"/>',
+    '<img src="uploads/2026/04/oki-oki.webp" alt="Oki Oki" loading="lazy"/>',
+    '<img src="uploads/2026/04/sri-lankan-airlines.webp" alt="SriLankan Airlines" loading="lazy"/>',
+    '<img src="uploads/2026/04/transmaldivian-airways.webp" alt="Trans Maldivian Airways" loading="lazy"/>',
+    '<img src="uploads/2026/04/advantis.webp" alt="Advantis" loading="lazy"/>',
+    '<img src="uploads/2026/04/aitkenspence.webp" alt="Aitken Spence" loading="lazy"/>',
+    '<img src="uploads/2026/04/ansell.webp" alt="Ansell" loading="lazy"/>',
+    '<img src="uploads/2026/04/efl.webp" alt="EFL" loading="lazy"/>',
+  ],
+};
+
+const logosContainer = document.getElementById('client-logos-container');
+if(logosContainer){ // guard: element absent on non-homepage pages
+
+  function renderLogos(industry) {
+    const logos = industryLogos[industry] || [];
+
+    logosContainer.style.opacity = '0';
+    logosContainer.style.transition = 'opacity 0.2s ease';
+
+    setTimeout(() => {
+      const items = logos.map(l => `<span class="client-logo">${l.replace('src="uploads/', 'src="' + phrAssetBase + 'uploads/')}</span>`).join('');
+      logosContainer.innerHTML = `<div class="logo-slider-track">${items}${items}</div>`;
+
+      const duration = logos.length * 2.2;
+      const track = logosContainer.querySelector('.logo-slider-track');
+      track.style.animationDuration = duration + 's';
+      ensureSeamlessLogoLoop(track); // pads out industries with only a few logos (e.g. retail, it)
+
+      logosContainer.addEventListener('mouseenter', () => track.style.animationPlayState = 'paused');
+      logosContainer.addEventListener('mouseleave', () => track.style.animationPlayState = 'running');
+
+      logosContainer.style.transition = 'opacity 0.35s ease';
+      logosContainer.style.opacity = '1';
+    }, 200);
+  }
+
+  document.querySelectorAll('.industry-tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      document.querySelectorAll('.industry-tab').forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+      renderLogos(tab.dataset.industry);
+    });
+  });
+
+  const activeTab = document.querySelector('.industry-tab.active');
+  if(activeTab) renderLogos(activeTab.dataset.industry);
+}
+
+const observer = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    if (entry.isIntersecting) {
+      entry.target.style.opacity = '1';
+      entry.target.style.transform = 'translateY(0)';
+    }
+  });
+}, { threshold: 0.1 });
+
+document.querySelectorAll('.module-card, .persona-card, .cs-card, .feature-item, .case-card, .chro-col').forEach(el => {
+  el.style.opacity = '0';
+  el.style.transform = 'translateY(24px)';
+  el.style.transition = 'opacity 0.5s ease, transform 0.5s ease';
+  observer.observe(el);
+});
+
+(function(){
+  const items = document.querySelectorAll('.pillar-item');
+  if(!items.length) return; // guard: element absent on non-CHRO pages
+
+  items.forEach(item => {
+    item.addEventListener('toggle', function(){
+      if(!this.open) return;
+
+      items.forEach(other => {
+        if(other !== this && other.open) other.removeAttribute('open');
+      });
+
+      const top = this.getBoundingClientRect().top + window.scrollY - 24;
+      window.scrollTo({ top, behavior: 'smooth' });
+    });
+  });
+})();
+
+(function(){
+  if(!('IntersectionObserver' in window)) return;
+  var wbrObserver = new IntersectionObserver(function(entries){
+    entries.forEach(function(entry){
+      if(entry.isIntersecting){
+        entry.target.style.opacity = '1';
+        entry.target.style.transform = 'translateY(0)';
+        wbrObserver.unobserve(entry.target);
+      }
+    });
+  }, { threshold: 0.1 });
+
+  document.querySelectorAll('.wbr-agenda-card, .wbr-getting-card').forEach(function(el){
+    requestAnimationFrame(function(){
+      el.style.opacity = '0';
+      el.style.transform = 'translateY(24px)';
+      el.style.transition = 'opacity 0.5s ease, transform 0.5s ease';
+      wbrObserver.observe(el);
+    });
+  });
+
+  setTimeout(function(){
+    document.querySelectorAll('.wbr-agenda-card, .wbr-getting-card').forEach(function(el){
+      el.style.opacity = '1';
+      el.style.transform = 'translateY(0)';
+    });
+  }, 2000);
+})();
+
+(function(){'use strict';var ProductsPage={initFaq:function(){var triggers=document.querySelectorAll('.phr-faq-item__trigger');triggers.forEach(function(btn){btn.addEventListener('click',function(){var item=btn.closest('.phr-faq-item');var group=item.closest('.phr-faq')||document;var body=item.querySelector('.phr-faq-item__body');var isOpen=item.classList.contains('phr-faq-item--open');group.querySelectorAll('.phr-faq-item--open').forEach(function(el){el.classList.remove('phr-faq-item--open');el.querySelector('.phr-faq-item__body').style.maxHeight='0';el.querySelector('.phr-faq-item__trigger').setAttribute('aria-expanded','false')});if(!isOpen){item.classList.add('phr-faq-item--open');body.style.maxHeight=body.scrollHeight+'px';btn.setAttribute('aria-expanded','true')}})})},init:function(){this.initFaq()}};document.addEventListener('DOMContentLoaded',function(){ProductsPage.init()});}());
+
+const LAZY_SECTIONS = {
+  pay:        `      <div class="dg-cat-header">
+        <div class="dg-cat-header-left">
+          <h2 class="dg-section-heading">Accurate payroll. Zero compliance risk.</h2>
+          <p class="dg-cat-desc">Automate your entire payroll cycle, right through to final payslips, with built-in statutory compliance for Sri Lanka and beyond.</p>
+        </div>
+        <div class="dg-cat-count-box">
+          <div class="dg-cat-count-num">1</div>
+          <div class="dg-cat-count-lbl">Demos available</div>
+        </div>
+      </div>
+      <div class="dg-grid">
+        <div class="dg-card" onclick="gatedDemo('cmvgf2zs70069wb0jv6aa5v55')">
+          <div class="dg-thumb dg-thumb-timepay">
+            <img src="../uploads/2026/08/Payroll_Anomaly_Detection.webp" alt="Payroll Anomaly Detection" class="dg-thumb-image">
+            <div class="dg-thumb-overlay"><div class="dg-play"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg></div></div>
+          </div>
+          <div class="dg-card-body">
+            <div class="dg-card-tag">Payroll</div>
+            <div class="dg-card-title">Payroll Anomaly Detection</div>
+            <div class="dg-card-desc">Flag errors in overtime, deductions, and other calculations before you process payroll, so every run goes out right the first time.</div>
+            <div class="dg-card-footer">
+              <button class="dg-card-cta">Watch Demo <svg viewBox="0 0 24 24" fill="none"><path d="M5 12h14M12 5l7 7-7 7" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+            </div>
+          </div>
+        </div>
+      </div>`,
+  time:       `      <div class="dg-cat-header">
+        <div class="dg-cat-header-left">
+          <h2 class="dg-section-heading">Real-time visibility across every hour worked.</h2>
+          <p class="dg-cat-desc">Biometric integrations, shift scheduling, overtime controls, and live attendance dashboards across every site and shift pattern.</p>
+        </div>
+        <div class="dg-cat-count-box">
+          <div class="dg-cat-count-num">2</div>
+          <div class="dg-cat-count-lbl">Demos available</div>
+        </div>
+      </div>
+      <div class="dg-grid">
+        <div class="dg-card" onclick="gatedDemo('cmov2pgrk05pu9rr9ct8hjufa')">
+          <div class="dg-thumb dg-thumb-timepay">
+            <img src="../uploads/2026/08/Manage_Leave_Applications_Approvals.webp" alt="Manage Leave Applications & Approvals" class="dg-thumb-image">
+            <div class="dg-thumb-overlay"><div class="dg-play"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg></div></div>
+            <div class="dg-thumb-new"><span class="new-tag">NEW</span></div>
+          </div>
+          <div class="dg-card-body">
+            <div class="dg-card-tag">Leave</div>
+            <div class="dg-card-title">Manage Leave Applications &amp; Approvals</div>
+            <div class="dg-card-desc">Request leave, approve pending applications, and review leave analytics, all in one streamlined workflow.</div>
+            <div class="dg-card-footer">
+              <button class="dg-card-cta">Watch Demo <svg viewBox="0 0 24 24" fill="none"><path d="M5 12h14M12 5l7 7-7 7" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+            </div>
+          </div>
+        </div>
+        <div class="dg-card" onclick="gatedDemo('cmovhp1dj13hj9rr9on8k7xga')">
+          <div class="dg-thumb dg-thumb-timepay">
+            <img src="../uploads/2026/08/Configure_Employee_Shift_Schedules_Roster_Groups.webp" alt="Configure Employee Shift Schedules & Roster Groups" class="dg-thumb-image">
+            <div class="dg-thumb-overlay"><div class="dg-play"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg></div></div>
+            
+          </div>
+          <div class="dg-card-body">
+            <div class="dg-card-tag">Attendance</div>
+            <div class="dg-card-title">Configure Employee Shift Schedules &amp; Roster Groups</div>
+            <div class="dg-card-desc">Assign employees to schedules by setting up roster groups, configuring shift parameters with breaks and overtime rules.</div>
+            <div class="dg-card-footer">
+              <button class="dg-card-cta">Watch Demo <svg viewBox="0 0 24 24" fill="none"><path d="M5 12h14M12 5l7 7-7 7" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+            </div>
+          </div>
+        </div>
+      </div>`,
+  talent:     `      <div class="dg-cat-header">
+        <div class="dg-cat-header-left">
+          <h2 class="dg-section-heading">Hire faster. Develop better. Retain longer.</h2>
+          <p class="dg-cat-desc">From the first application to succession planning, build a high-performance talent engine that scales with your business.</p>
+        </div>
+        <div class="dg-cat-count-box">
+          <div class="dg-cat-count-num">6</div>
+          <div class="dg-cat-count-lbl">Demos available</div>
+        </div>
+      </div>
+
+      <div class="dg-subcat">
+        <div class="dg-subcat-header">
+          <span class="dg-subcat-label">Hiring Manager</span>
+          <span class="dg-subcat-pill">4 demos</span>
+        </div>
+        <div class="dg-grid">
+        <div class="dg-card" onclick="gatedDemo('cmkgfw53z0001yg0ihojce4xw')">
+          <div class="dg-thumb dg-thumb-talent">
+            <img src="../uploads/2026/05/Job_Requisition.webp" alt="Job Requisitions" class="dg-thumb-image">
+            <div class="dg-thumb-overlay"><div class="dg-play"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg></div></div>
+            
+          </div>
+          <div class="dg-card-body">
+            <div class="dg-card-tag">Recruitment</div>
+            <div class="dg-card-title">Job Requisitions</div>
+            <div class="dg-card-desc">Create and manage job requisitions, define role requirements, and route approval requests before opening a vacancy.</div>
+            <div class="dg-card-footer">
+              <button class="dg-card-cta">Watch Demo <svg viewBox="0 0 24 24" fill="none"><path d="M5 12h14M12 5l7 7-7 7" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+            </div>
+          </div>
+        </div>
+        <div class="dg-card" onclick="gatedDemo('cmk0rq2ut1l9sgmn87oxiogg8')">
+          <div class="dg-thumb dg-thumb-talent">
+            <img src="../uploads/2026/05/Job_Advertisements.webp" alt="Job Advertisements" class="dg-thumb-image">
+            <div class="dg-thumb-overlay"><div class="dg-play"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg></div></div>
+            
+          </div>
+          <div class="dg-card-body">
+            <div class="dg-card-tag">Recruitment</div>
+            <div class="dg-card-title">Job Advertisements</div>
+            <div class="dg-card-desc">Publish open roles across multiple job boards and channels directly from PeoplesHR with a few clicks.</div>
+            <div class="dg-card-footer">
+              <button class="dg-card-cta">Watch Demo <svg viewBox="0 0 24 24" fill="none"><path d="M5 12h14M12 5l7 7-7 7" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+            </div>
+          </div>
+        </div>
+        <div class="dg-card" onclick="gatedDemo('cmk12fd6t1sr9gmn80bzrju5e')">
+          <div class="dg-thumb dg-thumb-talent">
+            <img src="../uploads/2026/05/CV_Ranking.webp" alt="CV Ranking" class="dg-thumb-image">
+            <div class="dg-thumb-overlay"><div class="dg-play"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg></div></div>
+            
+          </div>
+          <div class="dg-card-body">
+            <div class="dg-card-tag">Recruitment</div>
+            <div class="dg-card-title">CV Ranking</div>
+            <div class="dg-card-desc">Let AI score and rank candidates against your job criteria automatically, so your team focuses on the best-fit applicants first.</div>
+            <div class="dg-card-footer">
+              <button class="dg-card-cta">Watch Demo <svg viewBox="0 0 24 24" fill="none"><path d="M5 12h14M12 5l7 7-7 7" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+            </div>
+          </div>
+        </div>
+        </div>
+
+      <div class="dg-subcat">
+        <div class="dg-subcat-header">
+          <span class="dg-subcat-label">Candidate</span>
+          <span class="dg-subcat-pill">2 demos</span>
+        </div>
+        <div class="dg-grid">
+        <div class="dg-card" onclick="gatedDemo('cmk2d4gcs325agmn8p2684u2s')">
+          <div class="dg-thumb dg-thumb-talent">
+            <img src="../uploads/2026/05/Manage_Job_Application.webp" alt="Manage Job Application" class="dg-thumb-image">
+            <div class="dg-thumb-overlay"><div class="dg-play"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg></div></div>
+            
+          </div>
+          <div class="dg-card-body">
+            <div class="dg-card-tag">Recruitment</div>
+            <div class="dg-card-title">Manage Job Application</div>
+            <div class="dg-card-desc">See how candidates track, manage, and update their applications through the PeoplesHR candidate portal.</div>
+            <div class="dg-card-footer">
+              <button class="dg-card-cta">Watch Demo <svg viewBox="0 0 24 24" fill="none"><path d="M5 12h14M12 5l7 7-7 7" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+            </div>
+          </div>
+        </div>
+        <div class="dg-card" onclick="gatedDemo('cmk0wamcb1n1dgmn8uxzyt7rg')">
+          <div class="dg-thumb dg-thumb-talent">
+            <img src="../uploads/2026/05/Candidate_Application.webp" alt="Candidate Application" class="dg-thumb-image">
+            <div class="dg-thumb-overlay"><div class="dg-play"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg></div></div>
+            
+          </div>
+          <div class="dg-card-body">
+            <div class="dg-card-tag">Recruitment</div>
+            <div class="dg-card-title">Candidate Application</div>
+            <div class="dg-card-desc">Experience the candidate application journey first-hand, from discovering a role to submitting a complete application.</div>
+            <div class="dg-card-footer">
+              <button class="dg-card-cta">Watch Demo <svg viewBox="0 0 24 24" fill="none"><path d="M5 12h14M12 5l7 7-7 7" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+            </div>
+          </div>
+        </div>
+        </div>
+      </div>`,
+  engagement: `      <div class="dg-cat-header">
+        <div class="dg-cat-header-left">
+          <h2 class="dg-section-heading">Build a culture people don't want to leave.</h2>
+          <p class="dg-cat-desc">Measure, understand, and act on employee sentiment in real time, so you can fix problems before they become attrition.</p>
+        </div>
+        <div class="dg-cat-count-box">
+          <div class="dg-cat-count-num">3</div>
+          <div class="dg-cat-count-lbl">Demos available</div>
+        </div>
+      </div>
+      <div class="dg-grid">
+        <div class="dg-card" onclick="gatedDemo('REPLACE_ENGAGEMENT_SURVEYS_ID')">
+          <div class="dg-thumb dg-thumb-engage">
+            <div class="dg-thumb-ui">
+              <div class="dg-ui-bar"></div>
+              <div class="dg-ui-row"><div class="dg-ui-pill"></div><div class="dg-ui-pill w55"></div></div>
+              <div class="dg-ui-bar s"></div>
+            </div>
+            <div class="dg-thumb-overlay"><div class="dg-play"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg></div></div>
+            
+          </div>
+          <div class="dg-card-body">
+            <div class="dg-card-tag">Engagement</div>
+            <div class="dg-card-title">Employee Surveys &amp; Pulse Checks</div>
+            <div class="dg-card-desc">Deploy pulse surveys, eNPS, and custom questionnaires, then visualise sentiment trends in real-time dashboards.</div>
+            <div class="dg-card-footer">
+              <button class="dg-card-cta">Watch Demo <svg viewBox="0 0 24 24" fill="none"><path d="M5 12h14M12 5l7 7-7 7" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+            </div>
+          </div>
+        </div>
+        <div class="dg-card" onclick="gatedDemo('REPLACE_ENGAGEMENT_RECOGNITION_ID')">
+          <div class="dg-thumb dg-thumb-engage">
+            <div class="dg-thumb-ui">
+              <div class="dg-ui-bar"></div>
+              <div class="dg-ui-row"><div class="dg-ui-pill"></div><div class="dg-ui-pill w55"></div></div>
+              <div class="dg-ui-bar s"></div>
+            </div>
+            <div class="dg-thumb-overlay"><div class="dg-play"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg></div></div>
+            <div class="dg-thumb-new"><span class="new-tag">NEW</span></div>
+          </div>
+          <div class="dg-card-body">
+            <div class="dg-card-tag">Recognition</div>
+            <div class="dg-card-title">Recognition &amp; Rewards Programme</div>
+            <div class="dg-card-desc">Peer-to-peer shoutouts, manager nominations, milestone awards, and a points-based reward marketplace, all in-platform.</div>
+            <div class="dg-card-footer">
+              <button class="dg-card-cta">Watch Demo <svg viewBox="0 0 24 24" fill="none"><path d="M5 12h14M12 5l7 7-7 7" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+            </div>
+          </div>
+        </div>
+        <div class="dg-card" onclick="gatedDemo('REPLACE_ENGAGEMENT_MANAGER_ID')">
+          <div class="dg-thumb dg-thumb-engage">
+            <div class="dg-thumb-ui">
+              <div class="dg-ui-bar"></div>
+              <div class="dg-ui-row"><div class="dg-ui-pill"></div><div class="dg-ui-pill w55"></div></div>
+              <div class="dg-ui-bar s"></div>
+            </div>
+            <div class="dg-thumb-overlay"><div class="dg-play"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg></div></div>
+            
+          </div>
+          <div class="dg-card-body">
+            <div class="dg-card-tag">Manager Intelligence</div>
+            <div class="dg-card-title">Manager Effectiveness Scores</div>
+            <div class="dg-card-desc">Track team-level eNPS, 1:1 completion rates, and upward feedback scores to surface your best (and riskiest) managers.</div>
+            <div class="dg-card-footer">
+              <button class="dg-card-cta">Watch Demo <svg viewBox="0 0 24 24" fill="none"><path d="M5 12h14M12 5l7 7-7 7" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+            </div>
+          </div>
+        </div>
+      </div>`,
+  insight:    `      <div class="dg-cat-header">
+        <div class="dg-cat-header-left">
+          <h2 class="dg-section-heading">Turn your people data into strategic decisions.</h2>
+          <p class="dg-cat-desc">Real-time workforce intelligence, from pre-built dashboards to AI-powered natural language queries with Lexi, your HR copilot.</p>
+          <div class="lexi-powered-badge">
+            <span class="lpb-text">Powered by</span>
+            <img src="../uploads/2026/05/lexi-s.png" alt="Lexi" class="lpb-logo-img">
+          </div>
+        </div>
+        <div class="dg-cat-count-box">
+          <div class="dg-cat-count-num">3</div>
+          <div class="dg-cat-count-lbl">Demos available</div>
+        </div>
+      </div>
+      <div class="dg-grid">
+        <div class="dg-card" onclick="gatedDemo('cmsr2xph3023azj0jppp4zqmc')">
+          <div class="dg-thumb dg-thumb-insights">
+            <img src="../uploads/2026/10/contracted-hours-analysis.webp" alt="Lexi AI Insights: departments working beyond contracted hours" class="dg-thumb-image">
+            <div class="dg-thumb-overlay"><div class="dg-play"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg></div></div>
+            <div class="dg-thumb-new"><span class="new-tag">NEW</span></div>
+          </div>
+          <div class="dg-card-body">
+            <div class="dg-card-tag">Lexi AI Insights</div>
+            <div class="dg-card-title">Which Departments Work Beyond Contracted Hours?</div>
+            <div class="dg-card-desc">Ask Lexi in plain language and instantly see which departments are consistently working beyond their contracted hours.</div>
+            <div class="dg-card-footer">
+              <button class="dg-card-cta">Watch Demo <svg viewBox="0 0 24 24" fill="none"><path d="M5 12h14M12 5l7 7-7 7" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+            </div>
+          </div>
+        </div>
+        <div class="dg-card" onclick="gatedDemo('cmsr026bi0c1xqmm7mxnkwwam')">
+          <div class="dg-thumb dg-thumb-insights">
+            <img src="../uploads/2026/10/promotion-retention-analysis.webp" alt="Lexi AI Insights: are promoted employees more likely to stay" class="dg-thumb-image">
+            <div class="dg-thumb-overlay"><div class="dg-play"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg></div></div>
+            <div class="dg-thumb-new"><span class="new-tag">NEW</span></div>
+          </div>
+          <div class="dg-card-body">
+            <div class="dg-card-tag">Lexi AI Insights</div>
+            <div class="dg-card-title">Are Promoted Employees More Likely to Stay?</div>
+            <div class="dg-card-desc">See how Lexi connects promotion history with retention data to show whether promoted employees stay longer.</div>
+            <div class="dg-card-footer">
+              <button class="dg-card-cta">Watch Demo <svg viewBox="0 0 24 24" fill="none"><path d="M5 12h14M12 5l7 7-7 7" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+            </div>
+          </div>
+        </div>
+        <div class="dg-card" onclick="gatedDemo('cmsr4wi1t029bzj0jot73obit')">
+          <div class="dg-thumb dg-thumb-insights">
+            <img src="../uploads/2026/10/workforce-insights-mobile.webp" alt="Lexi AI Insights on mobile" class="dg-thumb-image">
+            <div class="dg-thumb-overlay"><div class="dg-play"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg></div></div>
+            <div class="dg-thumb-new"><span class="new-tag">NEW</span></div>
+          </div>
+          <div class="dg-card-body">
+            <div class="dg-card-tag">Mobile</div>
+            <div class="dg-card-title">Lexi AI Insights on Mobile</div>
+            <div class="dg-card-desc">Ask strategic workforce questions and get clear, data-driven insights directly from your mobile device.</div>
+            <div class="dg-card-footer">
+              <button class="dg-card-cta">Watch Demo <svg viewBox="0 0 24 24" fill="none"><path d="M5 12h14M12 5l7 7-7 7" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+            </div>
+          </div>
+        </div>
+      </div>`
+};
+
+function ensureLoaded(cat) {
+  var sec = document.getElementById('dg-' + cat);
+  if (!sec || sec.getAttribute('data-loaded') !== 'false') return;
+  sec.innerHTML = LAZY_SECTIONS[cat] || '';
+  sec.setAttribute('data-loaded', 'true');
+}
+
+function activateCat(cat) {
+  var tab = document.querySelector('.industry-tab[data-cat="' + cat + '"]');
+  var sec = document.getElementById('dg-' + cat);
+  if (!tab || !sec) return false;
+  ensureLoaded(cat);
+  document.querySelectorAll('.industry-tab').forEach(function(t) { t.classList.remove('active'); });
+  document.querySelectorAll('.dg-section').forEach(function(s) { s.classList.remove('visible'); });
+  tab.classList.add('active');
+  sec.classList.add('visible');
+  return true;
+}
+
+var catsWrap;
+var tIndex = 0, tTotal = 4;
+
+function scrollToDemos() {
+  var target = document.getElementById('demos');
+  if (!target || !catsWrap) return;
+  var wpHeader = document.querySelector('header.site-header, .site-header, #masthead, header') || { offsetHeight: 80 };
+  var headerH = wpHeader.offsetHeight || 80;
+  window.scrollTo({ top: target.getBoundingClientRect().top + window.pageYOffset - catsWrap.offsetHeight - headerH, behavior: 'smooth' });
+}
+function scrollToContact() {
+  var target = document.getElementById('dg-contact');
+  if (!target) return;
+  window.scrollTo({ top: target.getBoundingClientRect().top + window.pageYOffset - 24, behavior: 'smooth' });
+}
+function tGoTo(n) {
+  tIndex = n;
+  var track = document.getElementById('t-track');
+  if (track) track.style.transform = 'translateX(-' + (tIndex * 100) + '%)';
+  document.querySelectorAll('.t-dot').forEach(function(d, i) { d.classList.toggle('active', i === tIndex); });
+}
+function tSlide(dir) { tGoTo((tIndex + dir + tTotal) % tTotal); }
+
+document.addEventListener('DOMContentLoaded', function() {
+  catsWrap = document.querySelector('.dg-cats-wrap');
+
+  var dgFormSection = document.getElementById('dg-contact');
+  if (catsWrap && dgFormSection) {
+    var updateCatsWrapSticky = function() {
+      var formTop = dgFormSection.getBoundingClientRect().top;
+      catsWrap.classList.toggle('dg-cats-hidden', formTop <= catsWrap.offsetHeight);
+    };
+    window.addEventListener('scroll', updateCatsWrapSticky, { passive: true });
+    window.addEventListener('resize', updateCatsWrapSticky);
+    updateCatsWrapSticky();
+  }
+
+  document.querySelectorAll('.industry-tab[data-cat]').forEach(function(tab) {
+    tab.addEventListener('click', function() {
+      if (tab.classList.contains('dg-tab-disabled')) { showDevToast(); return; }
+      activateCat(tab.dataset.cat);
+      history.replaceState(null, '', '#' + tab.dataset.cat);
+      if (catsWrap) catsWrap.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  });
+
+  var hash = window.location.hash.replace('#', '').toLowerCase();
+  if (hash) activateCat(hash);
+
+  setInterval(function() { tSlide(1); }, 6000);
+
+  var c = document.getElementById('hs-form-container');
+  if (c) {
+    var obs = new MutationObserver(function() {
+      if (document.querySelector('#hs-form-container .hs-form')) {
+        var ph = document.getElementById('hs-placeholder');
+        if (ph) ph.style.display = 'none';
+        obs.disconnect();
+      }
+    });
+    obs.observe(c, { childList: true, subtree: true });
+
+    /* only queue the form build when #hs-form-container actually exists
+       on this page (interactive-demos.html) -- this whole DOMContentLoaded
+       handler runs sitewide (it's not scoped to that page), so without
+       this guard every other page queued a doomed hbspt.forms.create()
+       call that could never find its target, wasting a form-definition
+       fetch and printing a console warning on every page load. */
+    window.hsFormsOnReady = window.hsFormsOnReady || [];
+    window.hsFormsOnReady.push(function() {
+      hbspt.forms.create({
+        portalId: "45700506",
+        formId: "e3e8a63f-d050-4a3c-9178-acea4915a7cd",
+        region: "na2",
+        target: "#hs-form-container"
+      });
+    });
+  }
+});
+
+window.addEventListener('hashchange', function() {
+  var hash = window.location.hash.replace('#', '').toLowerCase();
+  if (hash) activateCat(hash);
+});
+
+var _pendingDemoId = null;
+var _gateDone = !!sessionStorage.getItem('phr_gate_done');
+
+/* window.Supademo comes from the external script.supademo.com/supademo.js
+   widget (loaded at the bottom of interactive-demos.html) -- guard every
+   call in case that script is still loading, failed to load (network
+   hiccup, ad blocker), or was left out of a page entirely, so a missing
+   demo player shows a message instead of a silent, uncaught exception. */
+function _openSupademo(id) {
+  if (window.Supademo && typeof window.Supademo.open === 'function') {
+    window.Supademo.open(id);
+  } else {
+    var toast = document.createElement('div');
+    toast.textContent = 'This demo is unavailable right now -- please try again in a moment.';
+    toast.style.cssText = 'position:fixed;bottom:32px;left:50%;transform:translateX(-50%);background:#0d1b3e;color:#fff;padding:12px 24px;border-radius:999px;box-shadow:0 8px 24px rgba(0,0,0,.25);z-index:99999;font-size:14px;font-weight:600;';
+    document.body.appendChild(toast);
+    setTimeout(function () { toast.remove(); }, 4000);
+  }
+}
+
+function gatedDemo(id) {
+  if (_gateDone) { _openSupademo(id); return; }
+  _pendingDemoId = id;
+  _showGate();
+}
+
+function gatedHeroDemo() {
+  if (_gateDone) { _loadHeroIframe(); return; }
+  _pendingDemoId = '__hero__';
+  _showGate();
+}
+
+function _loadHeroIframe() {
+  var iframe = document.getElementById('hero-demo-iframe');
+  if (iframe && iframe.dataset.src && !iframe.getAttribute('src')) {
+    iframe.setAttribute('src', iframe.dataset.src);
+  }
+  var overlay = document.getElementById('hero-gate-overlay');
+  if (overlay) overlay.style.display = 'none';
+}
+
+if (_gateDone) {
+  document.addEventListener('DOMContentLoaded', _loadHeroIframe);
+}
+
+function _showGate() {
+  var overlay = document.getElementById('dg-gate-overlay');
+  if (!overlay) return;
+  /* Move to direct child of <body> to escape any parent stacking context */
+  if (overlay.parentNode !== document.body) {
+    document.body.appendChild(overlay);
+  }
+  overlay.classList.add('active');
+  document.body.style.overflow = 'hidden';
+  _initGateForm();
+}
+
+function _hideGate() {
+  var overlay = document.getElementById('dg-gate-overlay');
+  if (overlay) overlay.classList.remove('active');
+  document.body.style.overflow = '';
+  _pendingDemoId = null;
+}
+
+function _onGateSubmit() {
+  var id = _pendingDemoId;
+  sessionStorage.setItem('phr_gate_done', '1');
+  _gateDone = true;
+  _hideGate();
+  if (id === '__hero__') {
+    setTimeout(_loadHeroIframe, 450);
+  } else if (id) {
+    setTimeout(function() { _openSupademo(id); }, 450);
+  }
+}
+
+function _initGateForm() {
+  var container = document.getElementById('dg-gate-form-container');
+  if (!container || container.querySelector('.hs-form')) return;
+  if (typeof hbspt === 'undefined') { setTimeout(_initGateForm, 250); return; }
+  hbspt.forms.create({
+    portalId:  '45700506',
+    formId:    'e3e8a63f-d050-4a3c-9178-acea4915a7cd',
+    region:    'na2',
+    target:    '#dg-gate-form-container',
+    onFormSubmitted: _onGateSubmit
+  });
+}
+
+window.addEventListener('message', function(e) {
+  if (!e.data || _gateDone) return;
+  if (e.data.type === 'hsFormCallback' &&
+     (e.data.eventName === 'onFormSubmitted' || e.data.eventName === 'onFormSubmit')) {
+    _onGateSubmit();
+  }
+});
+
+/* ==========================================================================
+   smsgt-lexi-ph-page.js
+   Page-specific interactions for SMSGT — AI-Powered HR Intelligence (Philippines).
+   Requires: phrhome.js loaded first.
+   ========================================================================== */
+
+(function () {
+  'use strict';
+
+  /* â”€â”€ HubSpot Modal â”€â”€ */
+  var overlay  = document.getElementById('hs-modal-overlay');
+  var closeBtn = document.getElementById('hs-modal-close');
+
+  if (overlay) {
+    function openModal(e) {
+      if (e) e.preventDefault();
+      overlay.classList.add('active');
+      overlay.setAttribute('aria-hidden', 'false');
+      document.body.style.overflow = 'hidden';
+    }
+
+    function closeModal() {
+      overlay.classList.remove('active');
+      overlay.setAttribute('aria-hidden', 'true');
+      document.body.style.overflow = '';
+    }
+
+    document.querySelectorAll('[data-open-hs]').forEach(function (el) {
+      el.addEventListener('click', openModal);
+    });
+
+    if (closeBtn) closeBtn.addEventListener('click', closeModal);
+
+    overlay.addEventListener('click', function (e) {
+      if (e.target === overlay) closeModal();
+    });
+
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && overlay.classList.contains('active')) closeModal();
+    });
+  }
+
+  /* â”€â”€ Scroll Animations (page-specific elements only) â”€â”€
+     phrhome.js handles .module-card, .persona-card, .cs-card, .feature-item.
+     This guard covers the selectors unique to this page.                    */
+  if ('IntersectionObserver' in window) {
+    var pageObserver = new IntersectionObserver(function (entries) {
+      entries.forEach(function (entry) {
+        if (entry.isIntersecting) {
+          entry.target.style.opacity  = '1';
+          entry.target.style.transform = 'translateY(0)';
+          pageObserver.unobserve(entry.target);
+        }
+      });
+    }, { threshold: 0.1 });
+
+    document.querySelectorAll('.lexi-card, .phr-module-card, .smsgt-cred-item').forEach(function (el) {
+      requestAnimationFrame(function () {
+        el.style.opacity    = '0';
+        el.style.transform  = 'translateY(24px)';
+        el.style.transition = 'opacity 0.5s ease, transform 0.5s ease';
+        pageObserver.observe(el);
+      });
+    });
+
+    /* Fallback: ensure elements are visible after 2 s regardless of observer */
+    setTimeout(function () {
+      document.querySelectorAll('.lexi-card, .phr-module-card, .smsgt-cred-item').forEach(function (el) {
+        el.style.opacity   = '1';
+        el.style.transform = 'translateY(0)';
+      });
+    }, 2000);
+  }
+
+}());
+
+/* ==========================================================================
+   ROI Calculator
+   ========================================================================== */
+var roiEmployeeSegmentation = {
+  'Hospitality': { general: 0.98, hr: 0.02 },
+  'Manufacturing': { general: 0.97, hr: 0.03 },
+  'Healthcare': { general: 0.98, hr: 0.02 },
+  'Banking & Finance': { general: 0.98, hr: 0.02 },
+  'Retail': { general: 0.98, hr: 0.02 },
+  'Logistics': { general: 0.98, hr: 0.02 },
+  'Other': { general: 0.98, hr: 0.02 }
+};
+
+var roiTimeAllocated = {
+  'Data extraction efficiency': { hr: 0.15000, general: 0.00000 },
+  'Check-in/out efficiency': { hr: 0.00625, general: 0.00625 },
+  'Payroll processing': { hr: 0.10000, general: 0.00000 },
+  'Payroll error correction': { hr: 0.05000, general: 0.00000 },
+  'Automating manual payroll tasks': { hr: 0.12500, general: 0.00000 },
+  'Benefits request processing': { hr: 0.05000, general: 0.00000 },
+  'Benefit application efficiency': { hr: 0.00625, general: 0.00625 },
+  'Data import efficiency': { hr: 0.01250, general: 0.00000 },
+  'Report generation': { hr: 0.03750, general: 0.00000 },
+  'Training needs': { hr: 0.00625, general: 0.00625 }
+};
+
+var roiTimeSaved = {
+  'Data extraction efficiency': { hr: 0.60, general: 0.00 },
+  'Check-in/out efficiency': { hr: 0.70, general: 0.30 },
+  'Payroll processing': { hr: 0.63, general: 0.00 },
+  'Payroll error correction': { hr: 1.00, general: 0.00 },
+  'Automating manual payroll tasks': { hr: 0.97, general: 0.00 },
+  'Benefits request processing': { hr: 0.67, general: 0.00 },
+  'Benefit application efficiency': { hr: 0.83, general: 0.83 },
+  'Data import efficiency': { hr: 0.78, general: 0.00 },
+  'Report generation': { hr: 0.85, general: 0.00 },
+  'Training needs': { hr: 0.75, general: 0.75 }
+};
+
+var roiThirdPartyUseCases = [
+  'Benefits request processing',
+  'Benefit application efficiency',
+  'Data import efficiency',
+  'Report generation',
+  'Training needs'
+];
+
+function roiFormatCurrency(amount) {
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0
+  }).format(amount);
+}
+
+function calculatePeoplesHRROI() {
+  var employees = document.getElementById('roi-employees').value;
+  var avgSalary = document.getElementById('roi-avg-salary').value;
+  var currentSolution = document.getElementById('roi-current-solution').value;
+  var industry = document.getElementById('roi-industry').value;
+
+  if (!employees || !avgSalary || !currentSolution || !industry) {
+    alert('Please fill in all fields');
+    return;
+  }
+
+  var numEmployees = parseInt(employees, 10);
+  var monthlyAvgSalary = parseFloat(avgSalary);
+
+  var segmentation = roiEmployeeSegmentation[industry];
+  var generalEmployees = Math.round(numEmployees * segmentation.general);
+  var hrEmployees = Math.round(numEmployees * segmentation.hr);
+
+  var useCasesToCalculate = Object.keys(roiTimeAllocated);
+  if (currentSolution === 'Third-party/in-house solution') {
+    useCasesToCalculate = roiThirdPartyUseCases;
+  }
+
+  var totalSavings = 0;
+  useCasesToCalculate.forEach(function (useCase) {
+    var hrTimeAlloc = roiTimeAllocated[useCase].hr;
+    var generalTimeAlloc = roiTimeAllocated[useCase].general;
+    var hrTimeSaved = roiTimeSaved[useCase].hr;
+    var generalTimeSaved = roiTimeSaved[useCase].general;
+
+    var hrSavings = (hrEmployees * monthlyAvgSalary) * hrTimeAlloc * hrTimeSaved;
+    var generalSavings = (generalEmployees * monthlyAvgSalary) * generalTimeAlloc * generalTimeSaved;
+    totalSavings += hrSavings + generalSavings;
+  });
+
+  var minSavings = totalSavings * 0.8;
+  var maxSavings = totalSavings * 1.2;
+
+  document.getElementById('roi-placeholder').classList.add('roi-hidden');
+  document.getElementById('roi-results').classList.add('roi-visible');
+
+  document.getElementById('roi-savings-range').textContent =
+    roiFormatCurrency(minSavings) + ' - ' + roiFormatCurrency(maxSavings);
+  document.getElementById('roi-min-savings').textContent = roiFormatCurrency(minSavings);
+  document.getElementById('roi-max-savings').textContent = roiFormatCurrency(maxSavings);
+}
+
+/* ==========================================================================
+   Cookie Consent Banner
+   Self-contained: injects its own markup, so no per-page HTML edit is
+   needed anywhere phr.js is already loaded (i.e. every page on the site).
+   ========================================================================== */
+(function () {
+  var COOKIE_NAME = 'phr_cookie_consent';
+  var COOKIE_DAYS = 180;
+
+  function getCookie(name) {
+    var match = document.cookie.match(new RegExp('(?:^|; )' + name + '=([^;]*)'));
+    return match ? decodeURIComponent(match[1]) : null;
+  }
+
+  function setCookie(name, value, days) {
+    var expires = new Date(Date.now() + days * 86400000).toUTCString();
+    document.cookie = name + '=' + encodeURIComponent(value) + '; expires=' + expires + '; path=/; SameSite=Lax';
+  }
+
+  if (getCookie(COOKIE_NAME)) return; // choice already made
+
+  var banner = document.createElement('div');
+  banner.className = 'phr-cookie-banner';
+  banner.setAttribute('role', 'region');
+  banner.setAttribute('aria-label', 'Cookie consent');
+  banner.innerHTML =
+    '<div class="phr-cookie-banner__inner">' +
+      '<p class="phr-cookie-banner__text">' +
+        '<strong>We use cookies.</strong> They help us run the site and understand how it&rsquo;s used. ' +
+        'See our <a href="/cookie-policy/">Cookie Policy</a> and <a href="/privacy-policy/">Privacy Policy</a> for details.' +
+      '</p>' +
+      '<div class="phr-cookie-banner__actions">' +
+        '<button type="button" class="phr-cookie-btn phr-cookie-btn--reject" id="phrCookieReject">Reject Non-Essential</button>' +
+        '<button type="button" class="phr-cookie-btn phr-cookie-btn--accept" id="phrCookieAccept">Accept All</button>' +
+      '</div>' +
+    '</div>';
+  document.body.appendChild(banner);
+
+  requestAnimationFrame(function () {
+    requestAnimationFrame(function () { banner.classList.add('is-visible'); });
+  });
+
+  function dismiss(choice) {
+    setCookie(COOKIE_NAME, choice, COOKIE_DAYS);
+    if (typeof window.gtag === 'function') { // GA4 (inc/ga4.php): apply the choice live
+      var v = choice === 'accepted' ? 'granted' : 'denied';
+      window.gtag('consent', 'update', {analytics_storage: v, ad_storage: v, ad_user_data: v, ad_personalization: v});
+    }
+    if (typeof window.clarity === 'function') { // Microsoft Clarity (inc/clarity.php)
+      if (choice === 'accepted') window.clarity('consent'); else window.clarity('consent', false);
+    }
+    banner.classList.remove('is-visible');
+    setTimeout(function () { banner.remove(); }, 400);
+  }
+
+  document.getElementById('phrCookieAccept').addEventListener('click', function () { dismiss('accepted'); });
+  document.getElementById('phrCookieReject').addEventListener('click', function () { dismiss('rejected'); });
+}());
+
+/* Video testimonial cards (.cs-vid-card in a .pay-voices or .ph-voices-section section) open the
+   YouTube player in #pay-vid-modal -- same behaviour as the customers
+   page's modal in js/casestudies.js. Used on philippines-payroll-lp.html
+   and philippines-hris.html; does nothing on pages without #pay-vid-modal. */
+(function () {
+  var modal = document.getElementById('pay-vid-modal');
+  var iframe = document.getElementById('pay-vid-iframe');
+  var closeBtn = document.getElementById('pay-vid-modal-close');
+  var titleEl = document.getElementById('pay-vid-modal-title');
+  if (!modal || !iframe || !closeBtn) return;
+
+  function openModal(ytId, title) {
+    iframe.src = 'https://www.youtube.com/embed/' + ytId + '?autoplay=1&rel=0&modestbranding=1';
+    if (titleEl) titleEl.textContent = title || '';
+    modal.classList.add('open');
+    document.body.style.overflow = 'hidden';
+    closeBtn.focus();
+  }
+  function closeModal() {
+    modal.classList.remove('open');
+    iframe.src = '';
+    document.body.style.overflow = '';
+  }
+
+  document.querySelectorAll('.pay-voices .cs-vid-card[data-youtube], .ph-voices-section .cs-vid-card[data-youtube]').forEach(function (card) {
+    function play() { openModal(card.getAttribute('data-youtube'), card.getAttribute('data-title')); }
+    card.addEventListener('click', play);
+    card.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); play(); }
+    });
+  });
+
+  closeBtn.addEventListener('click', closeModal);
+  modal.addEventListener('click', function (e) { if (e.target === modal) closeModal(); });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && modal.classList.contains('open')) closeModal();
+  });
+}());
+
+/* Folding dropdown lists (.phr-faq.phr-faq--fold): show the first 4 items,
+   with a "View N more" button below that reveals the rest (and becomes
+   "Show less"). Opt-in per list via the class. Done in JS so every item
+   stays visible if scripts don't run. */
+(function () {
+  var SHOW = 4;
+  document.querySelectorAll('.phr-faq.phr-faq--fold').forEach(function (faq) {
+    var extra = Array.prototype.slice.call(faq.querySelectorAll('.phr-faq-item')).slice(SHOW);
+    if (!extra.length) return;
+
+    var btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'pay-faq-more';
+    btn.setAttribute('aria-expanded', 'false');
+    faq.insertAdjacentElement('afterend', btn);
+
+    function set(expanded) {
+      extra.forEach(function (item) {
+        item.hidden = !expanded;
+        // collapsing: close any open item that's being hidden
+        if (!expanded && item.classList.contains('phr-faq-item--open')) {
+          item.classList.remove('phr-faq-item--open');
+          item.querySelector('.phr-faq-item__body').style.maxHeight = '0';
+          item.querySelector('.phr-faq-item__trigger').setAttribute('aria-expanded', 'false');
+        }
+      });
+      btn.setAttribute('aria-expanded', String(expanded));
+      btn.innerHTML = (expanded ? 'Show less' : 'View ' + extra.length + ' more') +
+        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>';
+    }
+    set(false);
+
+    btn.addEventListener('click', function () {
+      var expanded = btn.getAttribute('aria-expanded') !== 'true';
+      set(expanded);
+      if (expanded) extra[0].querySelector('.phr-faq-item__trigger').focus({ preventScroll: true });
+    });
+  });
+}());
+
+/* Hero demo form: keep the "Loading form…" spinner up until HubSpot's form
+   iframe has actually been drawn (it gets its real height a moment after
+   hs-form-event:on-ready), then swap it for the form. on-ready plus a short
+   delay and a 15s timeout are fallbacks so a blocked or failed embed never
+   leaves the spinner spinning forever. */
+(function () {
+  var body = document.querySelector('.hero-form-body');
+  var loader = body && body.querySelector('.pay-form-loading');
+  var frame = body && body.querySelector('.hs-form-frame');
+  if (!loader || !frame) return;
+
+  var formId = frame.getAttribute('data-form-id');
+  var done = false;
+  body.classList.add('is-loading');
+
+  function reveal() {
+    if (done) return;
+    done = true;
+    loader.parentNode.removeChild(loader);
+    body.classList.remove('is-loading');
+  }
+
+  if ('ResizeObserver' in window) {
+    new ResizeObserver(function () {
+      if (frame.offsetHeight > 200) reveal();
+    }).observe(frame);
+  }
+
+  window.addEventListener('hs-form-event:on-ready', function (e) {
+    if (!e.detail || !e.detail.formId || e.detail.formId === formId) setTimeout(reveal, 800);
+  });
+
+  setTimeout(reveal, 15000);
+}());
+
+/* Module tabs (.ph-mod-tab) on philippines.html and philippines-hris.html:
+   click a tab, show its panel, hide the rest. */
+(function () {
+  var modTabs = document.querySelectorAll('.ph-mod-tab');
+  modTabs.forEach(function (tab) {
+    tab.addEventListener('click', function () {
+      var target = tab.getAttribute('data-mod-tab');
+      modTabs.forEach(function (t) {
+        var isActive = t === tab;
+        t.classList.toggle('is-active', isActive);
+        t.setAttribute('aria-selected', isActive ? 'true' : 'false');
+      });
+      document.querySelectorAll('.ph-mod-panel').forEach(function (panel) {
+        var isActive = panel.getAttribute('data-mod-panel') === target;
+        panel.classList.toggle('is-active', isActive);
+        panel.hidden = !isActive;
+      });
+    });
+  });
+}());
+
+(function () {
+  /* "In Their Own Words" written testimonial slider (philippines.html and
+     philippines-hris.html) — cards render from PH_VOICES (single
+     source of truth) into the empty <ul id="phVoicesTrack">. Logo files
+     only exist for SMSGT and LaVie so far (companyLogo:null falls back
+     to a text badge, per buildVoiceCard above) — the rest render fine
+     without one, just add a logo path here once an asset is provided. */
+  var voicesTrack = document.getElementById('phVoicesTrack');
+  if(voicesTrack){
+    var PH_VOICES = [
+      {
+        id:'lavie',
+        quote:'What stands out the most is the team’s passion, commitment and willingness to listen to client feedback. As they continue innovating, learning and improving, the dedication behind the system is clearly visible and believe it will continue to grow stronger over time.',
+        personName:'Russel De Guzman',
+        jobTitle:'Senior Manager, HR',
+        companyName:'LaVie Resort & Casino',
+        industry:'Hospitality',
+        companyLogo:'https://peopleshr.com/uploads/2026/09/lavie_logo.webp',
+        companyLogoAlt:'LaVie Resort & Casino logo'
+      },
+      {
+        id:'smsgt-annamae',
+        quote:'PeoplesHR has truly transformed the way we manage our HR operations. By automating routine processes and centralizing employee data, we’ve been able to eliminate inefficiencies and focus more on strategic HR initiatives. Our partnership with PeoplesHR has been instrumental in modernizing our systems and fostering a more agile, responsive workplace.',
+        personName:'Anna Mae Rotoni',
+        jobTitle:'HR Supervisor',
+        companyName:'SMS Global Technologies, Inc.',
+        industry:'Technology',
+        companyLogo:'https://peopleshr.com/uploads/2026/09/smsgt-logo.svg',
+        companyLogoAlt:'SMS Global Technologies, Inc. logo'
+      },
+      {
+        id:'sandstone',
+        quote:'PayrollPlus by PeoplesHR has been instrumental in overcoming our payroll challenges by providing us with complete control over the process and ensuring timely completion. Its flexibility allows for last-minute changes, while the mobile app and self-service options enhance our employees’ experience by giving them easy access to view their leave balances.',
+        personName:'Gizelle Mangahas',
+        jobTitle:'Talent Acquisition Specialist',
+        companyName:'Sandstone Technology Phils., Inc.',
+        industry:'Technology',
+        companyLogo:'https://peopleshr.com/uploads/2026/09/Sandstone-logo.svg',
+        companyLogoAlt:'Sandstone Technology Phils., Inc. logo'
+      },
+      {
+        id:'uy-dental',
+        quote:'PayrollPlus by PeoplesHR has made a significant impact on our operations. Prior to using the system, managing payroll manually was time-consuming and prone to errors, especially as our team continued to grow. From the initial consultation to go-live, the PeoplesHR team provided exceptional support. The system has helped us streamline salary computation and payslip distribution.',
+        personName:'Cherry',
+        jobTitle:'HR Admin',
+        companyName:'Uy Dental Clinic Group',
+        industry:'Healthcare',
+        companyLogo:'https://peopleshr.com/uploads/2026/04/UY-Dental.webp',
+        companyLogoAlt:'Uy Dental Clinic Group logo'
+      },
+      {
+        id:'smsgt-peaches',
+        quote:'Our experience with PeoplesHR has been positive. The system efficiently generates attendance reports, including overtime and employee timesheets, while also simplifying the management of employee information and leave requests. The platform is user-friendly, easy to navigate, and highly customizable to our organizational needs.',
+        personName:'Peaches G. Lazatin',
+        jobTitle:'HR Practitioner',
+        companyName:'SMS Global Technologies, Inc.',
+        industry:'Technology',
+        companyLogo:'https://peopleshr.com/uploads/2026/09/smsgt-logo.svg',
+        companyLogoAlt:'SMS Global Technologies, Inc. logo'
+      },
+      {
+        id:'area29',
+        quote:'Thank you PayrollPlus by PeoplesHR, we’ve been looking for a better payroll system since our previous payroll system could not deliver an accurate and consistent output. With the help of PayrollPlus by PeoplesHR we can now enjoy the privilege of having our payroll processed within an hour.',
+        personName:'Sygrid Joy Oliveros',
+        jobTitle:'Vice President & CFO',
+        companyName:'Area29 Construction Corporation',
+        industry:'Construction',
+        companyLogo:'https://peopleshr.com/uploads/2026/09/area29.svg',
+        companyLogoAlt:'Area29 Construction Corporation logo'
+      },
+      {
+        id:'universal-canning',
+        quote:'I cannot speak highly enough of the PayrollPlus by PeoplesHR support team. Their dedication to providing timely and effective assistance is truly commendable. Whenever I’ve reached out with questions or concerns, they’ve been incredibly responsive, knowledgeable, and proactive in resolving any issues.',
+        personName:'Jhun Godoy',
+        jobTitle:'ICT Manager',
+        companyName:'Universal Canning Inc.',
+        industry:'Manufacturing',
+        companyLogo:'https://peopleshr.com/uploads/2026/09/universal_canning.svg',
+        companyLogoAlt:'Universal Canning Inc. logo'
+      },
+      {
+        id:'anako',
+        quote:'Using PayrollPlus has improved our payroll workflows—it’s easy to use, produces accurate results, and has been very stable. Their customer service is responsive and consistently helpful.',
+        personName:'Jennilyn Reza',
+        jobTitle:'HR Supervisor',
+        companyName:'Anako Philippines Corporation',
+        industry:'Manufacturing',
+        companyLogo:'https://peopleshr.com/uploads/2026/09/anako.svg',
+        companyLogoAlt:'Anako Philippines Corporation logo'
+      },
+      {
+        id:'punta-baler',
+        quote:'Payroll Plus has transformed our payroll process with its high-tech, real-time biometric tracking, eliminating the need for manual computations. The software is user-friendly, and their support team is always accessible, making it a truly efficient and reliable system.',
+        personName:'Goldie Frenz Nazareno',
+        jobTitle:'HR-Accounting Department',
+        companyName:'Punta Baler Food Ventures Inc.',
+        industry:'Food & Beverage',
+        companyLogo:'https://peopleshr.com/uploads/2026/09/punta_baler_logo.svg',
+        companyLogoAlt:'Punta Baler Hotel logo'
+      }
+    ];
+
+    var voicesPrev = document.getElementById('phVoicesPrev');
+    var voicesNext = document.getElementById('phVoicesNext');
+    var voicesDots = document.getElementById('phVoicesDots');
+    var voicesStatus = document.getElementById('phVoicesStatus');
+    var voicesReduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    var VOICES_GAP = 22;
+
+    var QUOTE_MARK_SVG = '<svg class="ph-voices-card-quote-mark" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7.5 6C4.5 8 3 11 3 14c0 2.8 1.9 4.5 4 4.5 2 0 3.5-1.5 3.5-3.5 0-1.8-1.2-3.2-3-3.5.4-1.8 1.7-3.5 3.5-4.8L7.5 6Zm9 0c-3 2-4.5 5-4.5 8 0 2.8 1.9 4.5 4 4.5 2 0 3.5-1.5 3.5-3.5 0-1.8-1.2-3.2-3-3.5.4-1.8 1.7-3.5 3.5-4.8L16.5 6Z"/></svg>';
+
+    var buildVoiceCard = function(voice){
+      var logoHtml = voice.companyLogo
+        ? '<img class="ph-voices-card-logo" src="' + voice.companyLogo + '" alt="' + voice.companyLogoAlt + '" loading="lazy">'
+        : '<span class="ph-voices-card-logo-fallback">' + (voice.companyName || voice.industry || 'PeoplesHR Customer') + '</span>';
+      var industryPill = (voice.companyLogo && voice.industry) ? '<p class="ph-voices-card-industry">' + voice.industry + '</p>' : '';
+      var primaryName = voice.personName || voice.jobTitle;
+      var secondaryLine = voice.personName
+        ? [voice.jobTitle, voice.companyName].filter(function(v){ return v; }).join(', ')
+        : [voice.industry, 'Philippines'].filter(function(v){ return v; }).join(', ');
+      return '<li class="ph-voices-card">' +
+        '<div class="ph-voices-card-logo-wrap">' + logoHtml + '</div>' +
+        industryPill +
+        QUOTE_MARK_SVG +
+        '<blockquote class="ph-voices-card-quote"><p>' + voice.quote + '</p></blockquote>' +
+        '<cite class="ph-voices-card-cite">' +
+          '<span class="ph-voices-card-name">' + primaryName + '</span>' +
+          '<span class="ph-voices-card-role">' + secondaryLine + '</span>' +
+        '</cite>' +
+      '</li>';
+    };
+
+    voicesTrack.innerHTML = PH_VOICES.map(buildVoiceCard).join('');
+
+    var getVisibleCount = function(){
+      var w = window.innerWidth;
+      if(w <= 640) return 1;
+      if(w <= 1024) return 2;
+      return 3;
+    };
+    var getPageCount = function(){
+      return Math.max(1, Math.ceil(PH_VOICES.length / getVisibleCount()));
+    };
+    /* currentPage is explicit state, not derived from scrollLeft on every
+       render: a smooth-scroll animation takes a few hundred ms to settle,
+       so deriving "current page" purely from scroll position made the
+       dots/arrows/status lag visibly behind a click. Nav actions set it
+       immediately; the scroll-settle listener below only exists to
+       resync it after an organic swipe/trackpad scroll. */
+    var currentPage = 0;
+    var getCurrentPageFromScroll = function(){
+      var cards = voicesTrack.querySelectorAll('.ph-voices-card');
+      if(!cards.length) return 0;
+      var cardWidth = cards[0].getBoundingClientRect().width + VOICES_GAP;
+      var visibleCount = getVisibleCount();
+      var index = Math.round(voicesTrack.scrollLeft / cardWidth);
+      return Math.min(getPageCount() - 1, Math.floor(index / visibleCount));
+    };
+    var renderDots = function(){
+      if(!voicesDots) return;
+      var pageCount = getPageCount();
+      var html = '';
+      for(var i = 0; i < pageCount; i++){
+        html += '<button type="button" class="ph-voices-dot' + (i === currentPage ? ' is-active' : '') + '" data-page="' + i + '" aria-label="Go to testimonials page ' + (i + 1) + ' of ' + pageCount + '"' + (i === currentPage ? ' aria-current="true"' : '') + '></button>';
+      }
+      voicesDots.innerHTML = html;
+      voicesDots.style.display = pageCount <= 1 ? 'none' : '';
+    };
+    var updateArrows = function(){
+      if(!voicesPrev || !voicesNext) return;
+      var pageCount = getPageCount();
+      voicesPrev.disabled = currentPage <= 0;
+      voicesNext.disabled = currentPage >= pageCount - 1;
+    };
+    var updateStatus = function(){
+      if(!voicesStatus) return;
+      var visibleCount = getVisibleCount();
+      var start = currentPage * visibleCount + 1;
+      var end = Math.min(PH_VOICES.length, start + visibleCount - 1);
+      voicesStatus.textContent = 'Showing testimonials ' + start + ' to ' + end + ' of ' + PH_VOICES.length;
+    };
+    var refresh = function(){
+      renderDots();
+      updateArrows();
+      updateStatus();
+    };
+    var scrollToPage = function(page){
+      var cards = voicesTrack.querySelectorAll('.ph-voices-card');
+      var visibleCount = getVisibleCount();
+      var index = page * visibleCount;
+      var target = cards[index];
+      if(!target) return;
+      voicesTrack.scrollTo({left: target.offsetLeft - voicesTrack.offsetLeft, behavior: voicesReduceMotion ? 'auto' : 'smooth'});
+    };
+    var goToPage = function(page){
+      var pageCount = getPageCount();
+      if(page < 0 || page >= pageCount || page === currentPage) return;
+      currentPage = page;
+      refresh();
+      scrollToPage(currentPage);
+    };
+    var goToAdjacentPage = function(dir){ goToPage(currentPage + dir); };
+
+    if(voicesPrev) voicesPrev.addEventListener('click', function(){ goToAdjacentPage(-1); startVoicesAutoplay(); });
+    if(voicesNext) voicesNext.addEventListener('click', function(){ goToAdjacentPage(1); startVoicesAutoplay(); });
+    if(voicesDots){
+      voicesDots.addEventListener('click', function(e){
+        var dot = e.target.closest('.ph-voices-dot');
+        if(!dot) return;
+        goToPage(parseInt(dot.getAttribute('data-page'), 10));
+        startVoicesAutoplay();
+      });
+    }
+
+    /* Resyncs currentPage after a manual swipe/trackpad scroll (nav
+       clicks already update state immediately via goToPage above, so
+       this listener is purely a safety net for organic scrolling). */
+    var voicesScrollTimer;
+    voicesTrack.addEventListener('scroll', function(){
+      clearTimeout(voicesScrollTimer);
+      voicesScrollTimer = setTimeout(function(){
+        currentPage = getCurrentPageFromScroll();
+        refresh();
+      }, 120);
+    }, {passive:true});
+
+    var voicesResizeTimer;
+    window.addEventListener('resize', function(){
+      clearTimeout(voicesResizeTimer);
+      voicesResizeTimer = setTimeout(function(){
+        currentPage = Math.min(currentPage, getPageCount() - 1);
+        refresh();
+        startVoicesAutoplay();
+      }, 150);
+    });
+
+    /* Auto-advance every 3s, looping back to page 0 after the last page.
+       Paused on hover/focus so a reader isn't fighting the slider, and
+       skipped entirely under prefers-reduced-motion like the other
+       animations on this page. */
+    var voicesAutoplayTimer = null;
+    var stopVoicesAutoplay = function(){
+      if(voicesAutoplayTimer){ clearInterval(voicesAutoplayTimer); voicesAutoplayTimer = null; }
+    };
+    var startVoicesAutoplay = function(){
+      stopVoicesAutoplay();
+      if(voicesReduceMotion || getPageCount() <= 1) return;
+      voicesAutoplayTimer = setInterval(function(){
+        currentPage = (currentPage + 1) % getPageCount();
+        refresh();
+        scrollToPage(currentPage);
+      }, 3000);
+    };
+    var voicesMore = document.querySelector('.ph-voices-more');
+    if(voicesMore){
+      voicesMore.addEventListener('mouseenter', stopVoicesAutoplay);
+      voicesMore.addEventListener('mouseleave', startVoicesAutoplay);
+      voicesMore.addEventListener('focusin', stopVoicesAutoplay);
+      voicesMore.addEventListener('focusout', startVoicesAutoplay);
+    }
+
+    refresh();
+    startVoicesAutoplay();
+  }
+}());

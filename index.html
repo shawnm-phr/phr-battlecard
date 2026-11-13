@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PeoplesHR Battle Cards</title>
+  <link rel="icon" type="image/png" href="favicon.png" />
+  <link rel="stylesheet" href="css/styles.css" />
+  <link rel="stylesheet" href="css/demo.css" />
+</head>
+<body>
+
+<div class="demo-scope">
+  <main id="main" class="bc-page">
+
+    <section class="bc-hero" aria-labelledby="bc-title">
+      <p class="bc-eyebrow">Sales battle cards</p>
+      <h1 id="bc-title" class="bc-title">Compare PeoplesHR</h1>
+
+      <div class="bc-picker" id="bc-picker">
+        <span class="bc-brand">PeoplesHR</span>
+
+        <span class="bc-vs">vs</span>
+        <div class="bc-slot" id="bc-slot-0">
+          <label class="bc-sr" for="bc-select-0">Competitor</label>
+          <select class="bc-select" id="bc-select-0"></select>
+        </div>
+
+        <span class="bc-vs" id="bc-vs-1" hidden>vs</span>
+        <div class="bc-slot" id="bc-slot-1" hidden>
+          <label class="bc-sr" for="bc-select-1">Second competitor</label>
+          <select class="bc-select" id="bc-select-1"></select>
+          <button type="button" class="bc-remove" id="bc-remove-1" aria-label="Remove second competitor">&times;</button>
+        </div>
+
+        <button type="button" class="bc-add" id="bc-add" hidden>+ Add competitor</button>
+      </div>
+
+      <p class="bc-hint" id="bc-hint">Select a competitor to see the battle card. You can compare up to two.</p>
+    </section>
+
+    <section class="bc-card" id="bc-card" aria-live="polite" hidden></section>
+
+  </main>
+</div>
+
+<script src="js/phr.js"></script>
+<script src="js/demo.js"></script>
+</body>
+</html>
